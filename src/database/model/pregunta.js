@@ -6,35 +6,35 @@ const preguntaSchema = new Schema({
         required: true,
         unique: true,
         minLength: 5,
-        maxLength: 50
+        maxLength: 150
     },
     opcionUno: {
         type: String,
         required: true,
         unique: true,
-        minLength: 5,
-        maxLength: 50
+        minLength: 1,
+        maxLength: 100
     },
     opcionDos: {
         type: String,
         required: true,
         unique: true,
-        minLength: 5,
-        maxLength: 50
+        minLength: 1,
+        maxLength: 100
     },
     opcionTres: {
         type: String,
         required: true,
         unique: true,
-        minLength: 5,
-        maxLength: 50
+        minLength: 1,
+        maxLength: 100
     },
     opcionCorrecta: {
         type: String,
         required: true,
         unique: true,
-        minLength: 5,
-        maxLength: 50
+        minLength: 1,
+        maxLength: 100
     },
     nivel: {
         type: String,
