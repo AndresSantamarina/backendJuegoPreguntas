@@ -14,6 +14,10 @@ app.listen(app.get('port'), () => {
 })
 
 app.use(cors())
+app.get('/preguntas', function (req, res, next) {
+    res.json({msg: 'This is CORS-enabled for all origins!'})
+  })
+
 app.use(morgan('dev'))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
