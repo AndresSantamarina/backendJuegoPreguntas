@@ -1,41 +1,57 @@
 import Pregunta from "../database/model/Pregunta.js"
 
+// Listar preguntas del usuario
 export const listarPreguntas = async (req, res) => {
-    try {
-        const preguntas = await Pregunta.find()
-        res.status(200).json(preguntas)
-    } catch (error) {
-        res.status(404).json({
-            mensaje: "No se pudieron obtener las preguntas"
-        })
-    }
-}
+  try {
+    const preguntas = await Pregunta.find({ usuario: req.usuario._id });
+    res.status(200).json(preguntas);
+  } catch (error) {
+    res.status(404).json({
+      mensaje: "No se pudieron obtener las preguntas"
+    });
+  }
+};
 
+// Obtener pregunta con verificación de ownership
 export const obtenerPregunta = async (req, res) => {
     try {
-        const preguntaBuscada = await Pregunta.findById(req.params.id)
-        res.status(200).json(preguntaBuscada)
+        const pregunta = await Pregunta.findOne({ 
+          _id: req.params.id,
+          usuario: req.usuario._id 
+        });
+        
+        if (!pregunta) {
+            return res.status(404).json({
+                mensaje: "Pregunta no encontrada o no tienes permisos"
+            });
+        }
+        
+        res.status(200).json(pregunta);
     } catch (error) {
         res.status(404).json({
             mensaje: "No se encontró la pregunta"
-        })
+        });
     }
 }
 
 export const crearPregunta = async (req, res) => {
-    try {
-        const preguntaNueva = new Pregunta(req.body)
-        await preguntaNueva.save()
-        res.status(201).json({
-            mensaje: "La pregunta fue creada correctamente"
-        })
-    } catch (error) {
-        console.error(error)
-        res.status(400).json({
-            mensaje: "No se pudo crear la pregunta"
-        })
-    }
-}
+  try {
+    const preguntaNueva = new Pregunta({
+      ...req.body,
+      usuario: req.usuario.id
+    });
+    await preguntaNueva.save();
+    res.status(201).json({
+      mensaje: "La pregunta fue creada correctamente"
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({
+      mensaje: "No se pudo crear la pregunta"
+    });
+  }
+};
+
 
 export const editarPregunta = async (req, res) => {
     try {
@@ -77,30 +93,34 @@ export const eliminarPregunta = async (req, res) => {
     }
 }
 
+// Obtener niveles disponibles para el usuario
 export const niveles = async (req, res) => {
     try {
-        const niveles = Pregunta.schema.path('nivel').enumValues;
-        res.status(200).json(niveles);
+        const todosLosNiveles = ['1','2','3','4','5','6','7','8','9','10'];
+        res.status(200).json(todosLosNiveles);
     } catch (error) {
-        console.error(error)
-        res.status(404).json({
-            mensaje: "No se pudieron obtener los niveles"
-        })
+        console.error(error);
+        res.status(500).json({
+            mensaje: "Error al obtener los niveles",
+            error: error.message
+        });
     }
 }
 
+
+// Listar preguntas por nivel y usuario
 export const preguntasPorNivel = async (req, res) => {
     try {
         const nivel = req.params.nivel;
         const preguntas = await Pregunta.find({
-            nivel: nivel
+            nivel: nivel,
+            usuario: req.usuario._id
         });
         res.status(200).json(preguntas);
     } catch (error) {
         console.error(error);
         res.status(500).json({
-            mensaje: "Error del servidor, no se pudo obtener la lista de preguntas.",
-            error: error
+            mensaje: "Error al obtener preguntas del nivel"
         });
     }
 };
