@@ -1,4 +1,4 @@
-import Pregunta from "../database/model/Preguntas.js"
+import Pregunta from "../database/model/Pregunta.js"
 
 export const listarPreguntas = async (req, res) => {
     try {
