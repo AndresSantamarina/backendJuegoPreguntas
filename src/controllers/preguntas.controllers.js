@@ -1,66 +1,79 @@
-import Pregunta from "../database/model/pregunta.js"
+import Pregunta from "../database/model/Pregunta.js"
 
 export const listarPreguntas = async (req, res) => {
-try {
-    const preguntas = await Pregunta.find()
-    res.status(200).json(preguntas)
-} catch (error) {
-    res.status(404).json({
-        mensaje: "No se pudieron obtener las preguntas"
-    })
-}
-}
+    try {
+        const preguntas = await Pregunta.find({ usuario: req.usuario._id });
+        res.status(200).json(preguntas);
+    } catch (error) {
+        res.status(404).json({
+            mensaje: "No se pudieron obtener las preguntas"
+        });
+    }
+};
 
 export const obtenerPregunta = async (req, res) => {
-try {
-    const preguntaBuscada = await Pregunta.findById(req.params.id)
-    res.status(200).json(preguntaBuscada)
-} catch (error) {
-    res.status(404).json({
-        mensaje:"No se encontró la pregunta"
-    })
-}
-}
+    try {
+        const pregunta = await Pregunta.findOne({
+            _id: req.params.id,
+            usuario: req.usuario._id
+        });
 
-export const crearPregunta = async (req,res)=>{
-try {
-    const preguntaNueva = new Pregunta(req.body)
-    await preguntaNueva.save()
-    res.status(201).json({
-        mensaje: "La pregunta fue creada correctamente"
-    })
-} catch (error) {
-    console.error(error)
-    res.status(400).json({
-        mensaje: "No se pudo crear la pregunta"
-    })
-}
-}
+        if (!pregunta) {
+            return res.status(404).json({
+                mensaje: "Pregunta no encontrada o no tienes permisos"
+            });
+        }
 
-export const editarPregunta = async(req, res) => {
-try {
-    const buscarPregunta = await Pregunta.findById(req.params.id)
-    if(!buscarPregunta){
-        return res.status(404).json({
-            mensaje: "No se pudo editar la pregunta, id incorrecto"
-        })
+        res.status(200).json(pregunta);
+    } catch (error) {
+        res.status(404).json({
+            mensaje: "No se encontró la pregunta"
+        });
     }
-    await Pregunta.findByIdAndUpdate(req.params.id, req.body)
-    res.status(200).json({
-        mensaje: "La pregunta fue modificada correctamente"
-    })
-} catch (error) {
-    console.error(error)
-    res.status(500).json({
-        mensaje: "Ocurrió un error al intentar editar la pregunta"
-    })
-}
 }
 
-export const eliminarPregunta = async (req,res) => {
+export const crearPregunta = async (req, res) => {
+    try {
+        const preguntaNueva = new Pregunta({
+            ...req.body,
+            usuario: req.usuario.id
+        });
+        await preguntaNueva.save();
+        res.status(201).json({
+            mensaje: "La pregunta fue creada correctamente"
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(400).json({
+            mensaje: "No se pudo crear la pregunta"
+        });
+    }
+};
+
+export const editarPregunta = async (req, res) => {
     try {
         const buscarPregunta = await Pregunta.findById(req.params.id)
-        if(!buscarPregunta){
+        if (!buscarPregunta) {
+            return res.status(404).json({
+                mensaje: "No se pudo editar la pregunta, id incorrecto"
+            })
+        }
+        await Pregunta.findByIdAndUpdate(req.params.id, req.body)
+        res.status(200).json({
+            mensaje: "La pregunta fue modificada correctamente"
+        })
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({
+            mensaje: "Ocurrió un error al intentar editar la pregunta"
+        })
+    }
+}
+
+export const eliminarPregunta = async (req, res) => {
+    try {
+        const buscarPregunta = await Pregunta.findById(req.params.id)
+        if (!buscarPregunta) {
             return res.status(404).json({
                 mensaje: "No se pudo eliminar la pregunta, el id es incorrecto"
             })
@@ -79,28 +92,29 @@ export const eliminarPregunta = async (req,res) => {
 
 export const niveles = async (req, res) => {
     try {
-      const niveles = Pregunta.schema.path('nivel').enumValues;
-      res.status(200).json(niveles);
+        const todosLosNiveles = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+        res.status(200).json(todosLosNiveles);
     } catch (error) {
-      console.error(error)
-      res.status(404).json({
-        mensaje: "No se pudieron obtener los niveles"
-      })
+        console.error(error);
+        res.status(500).json({
+            mensaje: "Error al obtener los niveles",
+            error: error.message
+        });
     }
-  }
+}
 
 export const preguntasPorNivel = async (req, res) => {
     try {
-      const nivel = req.params.nivel;
-      const preguntas = await Pregunta.find({
-        nivel: nivel
-      });
-      res.status(200).json(preguntas);
+        const nivel = req.params.nivel;
+        const preguntas = await Pregunta.find({
+            nivel: nivel,
+            usuario: req.usuario._id
+        });
+        res.status(200).json(preguntas);
     } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        mensaje: "Error del servidor, no se pudo obtener la lista de preguntas.",
-        error: error
-      });
+        console.error(error);
+        res.status(500).json({
+            mensaje: "Error al obtener preguntas del nivel"
+        });
     }
-  };
+};
