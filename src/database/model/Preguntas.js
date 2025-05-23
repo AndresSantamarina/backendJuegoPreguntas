@@ -4,35 +4,30 @@ const preguntaSchema = new Schema({
     pregunta: {
         type: String,
         required: true,
-        unique: true,
         minLength: 5,
         maxLength: 150
     },
     opcionUno: {
         type: String,
         required: true,
-        unique: true,
         minLength: 1,
         maxLength: 100
     },
     opcionDos: {
         type: String,
         required: true,
-        unique: true,
         minLength: 1,
         maxLength: 100
     },
     opcionTres: {
         type: String,
         required: true,
-        unique: true,
         minLength: 1,
         maxLength: 100
     },
     opcionCorrecta: {
         type: String,
         required: true,
-        unique: true,
         minLength: 1,
         maxLength: 100
     },
