@@ -15,7 +15,8 @@ app.listen(app.get('port'), () => {
 })
 
 app.use(cors({
-  origin: "*"
+  origin: "*",
+  credentials: true,
 }));
 
 app.use(morgan('dev'))
