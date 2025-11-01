@@ -7,7 +7,7 @@
   ],
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/socket.io/(.*)",
       "destination": "/"
     }
   ],
