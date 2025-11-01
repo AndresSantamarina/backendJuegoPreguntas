@@ -15,23 +15,30 @@ const generateRoomId = () => {
     return result;
 };
 
-const getSafeRoomData = (room) => ({
-    roomId: room.roomId,
-    status: room.status,
-    currentRound: room.currentRound,
-    currentTurnIndex: room.currentTurnIndex,
-    turnOrder: room.turnOrder,
+const getSafeRoomData = (room) => {
+    const roomObject = room.toObject ? room.toObject() : room;
 
-    players: room.players.map(p => ({
-        id: p.userId.toString(),
-        name: p.username,
-        isHost: p.userId.toString() === room.hostId.toString(),
-        lives: p.lives,
-        isAlive: p.isAlive,
-        clueGiven: p.clueGiven,
-        guessGiven: p.guessGiven
-    })),
-});
+    return {
+        roomId: room.roomId,
+        status: room.status,
+        currentRound: room.currentRound,
+        currentTurnIndex: room.currentTurnIndex,
+        turnOrder: room.turnOrder,
+        turnStartTime: room.turnStartTime,
+        turnDuration: TURN_TIME_MS, // Asumiendo que es constante
+
+        players: room.players.map(p => ({
+            id: p.userId.toString(),
+            name: p.username,
+            isHost: p.userId.toString() === room.hostId.toString(),
+            lives: p.lives,
+            isAlive: p.isAlive,
+            clueGiven: p.clueGiven,
+            guessGiven: p.guessGiven,
+            isImpostor: p.isImpostor // ¡Esto es necesario para que el frontend lo visualice!
+        })),
+    }
+};
 
 const shuffleArray = (array) => {
     for (let i = array.length - 1; i > 0; i--) {
@@ -67,67 +74,66 @@ const setNextTurn = async (room, isTimeout = false) => {
         }
     }
 
-    // 1. **Fase de PISTAS (IN_GAME)**
     if (room.status === 'IN_GAME') {
         let nextPlayerIndex = -1;
-        // Determine el punto de inicio de la búsqueda.
-        // Si currentTurnIndex es -1, startIndex es 0. Si no, es el siguiente índice.
-        let startIndex = (room.currentTurnIndex + 1) % room.turnOrder.length;
-        if (room.currentTurnIndex === -1) startIndex = 0; // Inicia en 0 si es la primera vez (desde resetRoundState)
+        let startIndex;
+        // 🚨 LOG 1: Verificar el estado del turno y el índice inicial
+        console.log(`[SET_TURN] Estado de la Sala: ${room.status}, Turno Anterior: ${room.currentTurnIndex}`);
+        console.log(`[SET_TURN] turnOrder completo: ${room.turnOrder.map(id => id.toString())}`);
+        // let startIndex = (room.currentTurnIndex + 1) % room.turnOrder.length;
+
+        if (room.currentTurnIndex === -1) {
+            startIndex = 0;
+        } else {
+            startIndex = (room.currentTurnIndex + 1) % room.turnOrder.length;
+        }
 
         let currentIndex = startIndex;
 
-        // **USAMOS UN BUCLE FOR PARA SIMPLIFICAR EL RECORRIDO CIRCULAR**
-        // Recorremos todos los jugadores de room.turnOrder para encontrar al siguiente.
         for (let i = 0; i < room.turnOrder.length; i++) {
             const playerId = room.turnOrder[currentIndex];
-            const player = room.players.find(p => p.userId.toString() === playerId.toString());
-
-            // Si el jugador está vivo Y NO ha dado pista
+            const playerIdString = playerId.toString();
+            const player = room.players.find(p => p.userId.toString() === playerIdString);
+            if (player) {
+                console.log(`[SET_TURN] Iteración ${i} (Índice ${currentIndex}):`);
+                console.log(`  -> ID de turnOrder (playerIdString): ${playerIdString} (Tipo: ${typeof playerIdString})`);
+                console.log(`  -> ID del Jugador (p.userId.toString()): ${player.userId.toString()} (Tipo: ${typeof player.userId.toString()})`);
+                console.log(`  -> ¿Está Vivo? ${player.isAlive}`);
+                console.log(`  -> Valor de clueGiven: ${player.clueGiven} (Tipo: ${typeof player.clueGiven})`);
+            } else {
+                console.log(`[SET_TURN] Error: No se encontró el jugador con ID ${playerIdString} en room.players.`);
+            }
             if (player && player.isAlive && player.clueGiven === null) {
                 nextPlayerIndex = currentIndex;
-                break; // Jugador encontrado
+                break;
             }
 
-            // Mover al siguiente índice circularmente
             currentIndex = (currentIndex + 1) % room.turnOrder.length;
         }
 
         if (nextPlayerIndex !== -1) {
-            // A. Turno Encontrado (Primer o N-ésimo turno)
             room.currentTurnIndex = nextPlayerIndex;
             room.turnStartTime = new Date();
             await room.save();
-
             const nextTurnPlayerId = room.turnOrder[room.currentTurnIndex];
             const nextTurnPlayer = room.players.find(p => p.userId.toString() === nextTurnPlayerId.toString());
 
-
-            // console.log(`[BE - NEXT TURN] Next Player ID: ${nextTurnPlayerId}`);
-            // console.log(`[BE - NEXT TURN] Current Index: ${room.currentTurnIndex}`);
-            // console.log(`[BE - NEXT TURN] Turn Order (First): ${room.turnOrder[0]}`);
-            // // Emitir el avance
-            // console.log("[DEBUG TURN] Emitiendo el índice CORRECTO (0) a través de 'turn_advanced'");
-            io.to(roomCode).emit('turn_advanced', {
+            io.to(room.roomId).emit('turn_advanced', {
                 ...getSafeRoomData(room),
-                // 🔥 CAMBIO CLAVE: Enviamos la ID del jugador actual de forma directa
-                currentPlayerId: nextTurnPlayerId,
+                currentPlayerId: room.currentTurnPlayerId,
                 nextTurnUsername: nextTurnPlayer.username,
-                turnStartTime: room.turnStartTime.getTime(), // <-- Envía el timestamp
+                turnStartTime: room.turnStartTime.getTime(),
                 turnDuration: TURN_TIME_MS
             });
-            // Establecer el timer
             ROOM_TIMERS[roomCode] = setTimeout(() => {
                 setNextTurn(room, true);
             }, TURN_TIME_MS);
 
         } else {
-            // B. NADIE MÁS TIENE QUE DAR PISTA (Fin de la ronda de pistas)
             room.status = 'VOTING';
-            room.votes = []; // Asegúrate de que este array esté vacío.
+            room.votes = [];
             room.currentTurnIndex = -1;
             room.turnStartTime = null;
-            // Guardamos el historial de pistas (¡Correcto!)
             room.roundHistory.push({
                 round: room.currentRound,
                 clues: room.players
@@ -151,11 +157,7 @@ const handleTwoPlayersGame = async (room) => {
 
     if (alivePlayers.length !== 2) return false;
 
-    // Es crucial que el impostor actual (el que tiene isImpostor: true) sea quien sepa la palabra clave.
     const impostorPlayer = alivePlayers.find(p => p.isImpostor);
-
-    // Aquí, si usas la lógica de palabra secreta global, asegúrate de que room.secretWord esté actualizada
-    // Si la palabra clave cambia por ronda, debe ser elegida ANTES de llegar aquí.
 
     room.status = 'GUESSING';
     room.currentRound += 1;
@@ -172,18 +174,13 @@ const handleTwoPlayersGame = async (room) => {
     room.votes = [];
     room.turnOrder = shuffleArray(alivePlayers.map(p => p.userId.toString()));
 
-    // Necesitamos asegurarnos de que la palabra secreta esté establecida ANTES de guardar.
-    // Asumiendo que room.secretWord ya está establecida y es la palabra clave.
-
     await room.save();
 
-    // El error de "la palabra no se encuentra en la lista" se resuelve
-    // enviando las palabras de la CATEGORÍA al frontend.
     const category = await Category.findById(room.categoryId);
 
     io.to(roomCode).emit('guessing_started', {
         ...getSafeRoomData(room),
-        words: category.words, // ENVIAR LAS PALABRAS DE LA CATEGORÍA
+        words: category.words,
         message: "¡Solo quedan 2! Comienza la ronda de adivinanza. Adivinad la palabra clave de la lista."
     });
 
@@ -234,9 +231,16 @@ const resetRoundState = async (room) => {
         p.guessGiven = false;
     });
     room.votes = [];
-    room.impostorTarget = null; // Resetear el objetivo del impostor.
+    room.impostorTarget = null;
     await room.save();
     await setNextTurn(room);
+
+    io.to(room.roomId).emit('round_new', {
+        currentRound: room.currentRound,
+        message: "Nueva ronda, ¡a jugar!"
+    });
+
+    io.to(room.roomId).emit('game_started_update'); // <--- ¡Añade esto!
 
     return false;
 };

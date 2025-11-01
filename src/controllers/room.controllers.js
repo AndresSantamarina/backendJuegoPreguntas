@@ -16,11 +16,9 @@ export const getRoomStatus = async (req, res) => {
 
         if (!isPlayer) return res.status(403).json({ message: "No eres un jugador de esta sala." });
 
-        // Devolver la sala completa (incluyendo la palabra clave si está en juego para el inocente)
         const roomData = getSafeRoomData(room);
         const player = room.players.find(p => p.userId.toString() === userId.toString());
 
-        // Información sensible solo para el jugador que la solicita
         roomData.userRole = {
             isImpostor: player.isImpostor,
             secretWord: !player.isImpostor ? room.secretWord : "Eres el Impostor",

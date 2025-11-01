@@ -101,36 +101,19 @@ import { registerGameHandlers } from '../controllers/index.js';
 const socketRoomMap = new Map();
 
 export const initSocketIO = (io) => {
-    // 🔑 ÚNICO io.on('connection') en toda la aplicación
     io.on('connection', (socket) => {
-        // console.log(`[Socket.IO]: Usuario conectado: ${socket.id}`);
-
-        // 1. **REGISTRAR TODOS LOS HANDLERS DE LÓGICA DE JUEGO**
         registerGameHandlers(socket, io);
-
-        // 2. **LÓGICA SIMPLE DE JOIN ROOM (SOLO TRANSPORTE)**
         socket.on('join_room', ({ roomId, userId }) => {
             const roomCode = roomId.toUpperCase();
             socket.join(roomCode);
             socketRoomMap.set(socket.id, { roomCode, userId });
             console.log(`[Socket.IO]: ${userId} se unió al room: ${roomCode}`);
-            // 🛑 NOTA: NO hay lógica de DB o emisión de lobby aquí.
-            // Esa lógica va en 'lobbyHandlers.js' (con el evento 'joinRoom').
         });
-
-        // 3. **LÓGICA SIMPLE DE DISCONNECT**
-        // Nota: Si usas 'connectionHandlers.js' para manejar la desconexión, 
-        // puedes eliminar esta parte del código y dejarla solo en el handler modular.
-        // Si la dejas aquí, asegúrate de que no se duplique la lógica de la DB.
         socket.on('disconnect', async () => {
             const socketData = socketRoomMap.get(socket.id);
             if (socketData) {
                 const { roomCode, userId } = socketData;
                 socketRoomMap.delete(socket.id); 
-                // console.log(`[Socket.IO]: Usuario ${userId} desconectado del room: ${roomCode}`);
-                
-                // Si la lógica de DB para desconexión está en 'connectionHandlers.js',
-                // el trabajo aquí termina. Si no, debe hacer el cleanup mínimo necesario.
             }
         });
     });

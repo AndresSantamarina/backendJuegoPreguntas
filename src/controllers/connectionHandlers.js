@@ -14,7 +14,7 @@ export const registerConnectionHandlers = (socket, io, userId, userName) => {
                     room.players = room.players.filter(p => p.userId.toString() !== userId.toString());
                     await room.save();
 
-                    io.to(room.roomId).emit(`player_update_${room.roomId}`, {
+                    io.to(room.roomId).emit(`player_update`, {
                         players: getSafeRoomData(room).players
                     });
 
@@ -30,7 +30,6 @@ export const registerConnectionHandlers = (socket, io, userId, userName) => {
                         message: `⚠️ ¡El jugador ${userName} se ha desconectado y ha sido eliminado de la partida!`
                     });
 
-                    // 1. Comprobar si termina la partida por desconexión
                     const aliveInnocents = room.players.filter(p => p.isAlive && !p.isImpostor).length;
                     if (aliveInnocents === 0 && room.impostorId) {
                         room.status = 'FINISHED';

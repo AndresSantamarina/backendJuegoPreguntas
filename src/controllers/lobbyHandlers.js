@@ -1,21 +1,25 @@
 import Room from "../database/model/Room.js";
 import Category from "../database/model/Category.js"
-import {generateRoomId, getSafeRoomData, shuffleArray, setNextTurn } from './gameLogic.js'
+import { generateRoomId, getSafeRoomData, shuffleArray, setNextTurn } from './gameLogic.js'
 
 export const registerLobbyHandlers = (socket, io, userId, userName) => {
-    const createSafeCallback = (callback) => (response) => {
+
+    // Función de respuesta local para garantizar que el callback de Socket.io se ejecute solo si existe.
+    // Esto previene el "TypeError: callback is not a function" en el frontend.
+    const createSafeResponse = (callback) => (response) => {
         if (typeof callback === 'function') {
             callback(response);
         }
     };
+
     socket.on('createRoom', async (data, callback) => {
-        const safeCallback = createSafeCallback(callback);
+        const res = createSafeResponse(callback);
         const { categoryName } = data;
 
         try {
             const allCategories = await Category.find({});
             if (allCategories.length === 0) {
-                return safeCallback({ success: false, message: "No hay categorías disponibles en la base de datos." });
+                return res({ success: false, message: "No hay categorías disponibles en la base de datos." });
             }
 
             let selectedCategory = null;
@@ -28,13 +32,13 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
                     c => c.name.toUpperCase() === categoryName.toUpperCase()
                 );
                 if (!foundCategory) {
-                    return safeCallback({ success: false, message: `Categoría "${categoryName}" no válida.` });
+                    return res({ success: false, message: `Categoría "${categoryName}" no válida.` });
                 }
                 selectedCategory = foundCategory;
             }
 
             if (!selectedCategory || selectedCategory.words.length < 2) {
-                return safeCallback({ success: false, message: "La categoría seleccionada no tiene palabras suficientes." });
+                return res({ success: false, message: "La categoría seleccionada no tiene palabras suficientes." });
             }
 
             let roomId;
@@ -60,12 +64,13 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
                 players: [hostPlayer],
                 categoryId: selectedCategory._id,
                 status: 'LOBBY',
+                // maxPlayers se asume que se establece aquí o en el esquema (usando un valor por defecto)
             });
 
             await newRoom.save();
 
             socket.join(roomId);
-            safeCallback({
+            res({
                 success: true,
                 roomId: roomId,
                 room: getSafeRoomData(newRoom),
@@ -74,29 +79,30 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
 
         } catch (error) {
             console.error("Error al crear sala (Socket):", error);
-            safeCallback({ success: false, message: "Error interno al crear la sala." });
+            res({ success: false, message: "Error interno al crear la sala." });
         }
     });
 
     socket.on('joinRoom', async (data, callback) => {
-        const safeCallback = createSafeCallback(callback);
+        const res = createSafeResponse(callback);
         const { roomId } = data;
         const roomCode = roomId.toUpperCase();
 
         try {
             let room = await Room.findOne({ roomId: roomCode });
 
-            if (!room) { safeCallback({ success: false, message: "Sala no encontrada." }); return }
-            if (room.status !== 'LOBBY') return safeCallback({ success: false, message: "La partida ya ha comenzado." });
+            if (!room) { res({ success: false, message: "Sala no encontrada." }); return }
+            if (room.status !== 'LOBBY') return res({ success: false, message: "La partida ya ha comenzado." });
             const isPlayerInRoom = room.players.some(p => p.userId.toString() === userId.toString());
 
             if (isPlayerInRoom) {
                 socket.join(roomCode);
-                return safeCallback({ success: true, roomId: roomCode, room: getSafeRoomData(room), message: "Ya estás en esta sala." });
+                return res({ success: true, roomId: roomCode, room: getSafeRoomData(room), message: "Ya estás en esta sala." });
             }
 
+            // Asumiendo que maxPlayers tiene un valor por defecto razonable o está definido
             if (room.players.length >= room.maxPlayers) {
-                return safeCallback({ success: false, message: "La sala está llena (4/4)." });
+                return res({ success: false, message: `La sala está llena (${room.maxPlayers}/${room.maxPlayers}).` });
             }
 
             const newPlayer = {
@@ -118,50 +124,69 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
 
             socket.join(roomCode);
             console.log('Emitiendo a sala', roomCode, 'con', room.players.length, 'jugadores.');
-            io.to(roomCode).emit(`player_update_${roomCode}`, {
-                ...getSafeRoomData(room), // Enviamos toda la data de la sala (incluyendo la lista de players)
-                message: `${userName} se ha unido al lobby.` // Opcional, pero útil
+            io.to(roomCode).emit(`player_update`, {
+                ...getSafeRoomData(room),
+                message: `${userName} se ha unido al lobby.`
             });
 
-            safeCallback({
-
+            res({
                 success: true,
                 roomId: roomCode,
                 room: getSafeRoomData(room),
                 message: `Te has unido a la sala ${roomCode}.`
-
             });
             console.log('Callback a', userName, 'con estado de sala:', getSafeRoomData(room).players.map(p => p.username));
 
         } catch (error) {
             console.error("Error al unirse a sala (Socket):", error);
-            safeCallback({ success: false, message: "Error interno al unirse a la sala." });
+            res({ success: false, message: "Error interno al unirse a la sala." });
         }
     })
 
     socket.on('getGameState', async (data, callback) => {
-        const safeCallback = createSafeCallback(callback);
+        const res = createSafeResponse(callback);
         const { roomId, userId } = data;
         const roomCode = roomId.toUpperCase();
 
         try {
-            const room = await Room.findOne({ roomId: roomCode }).populate('categoryId', 'words');
+            // Asegúrate de poblar categoryId para tener acceso a las palabras
+            const room = await Room.findOne({ roomId: roomCode }).populate('categoryId');
 
-            if (!room) { safeCallback({ success: false, message: 'Sala no encontrada.' }); return }
+            if (!room) { res({ success: false, message: 'Sala no encontrada.' }); return }
 
             const player = room.players.find(p => p.userId.toString() === userId.toString());
-            if (!player) return safeCallback({ success: false, message: 'No eres jugador de esta sala.' });
+            if (!player) return res({ success: false, message: 'No eres jugador de esta sala.' });
 
             socket.join(roomCode);
 
-            const myRole = player.isImpostor ? 'IMPOSTOR' : 'INNOCENT';
-            const myKeyword = player.isImpostor ? room.categoryId.words.find(w => w !== room.secretWord) : room.secretWord;
+            // 💡 Verificación de la Palabra Clave:
+            let myKeyword = null;
+            if (room.status === 'IN_GAME') {
+                if (player.isImpostor) {
+                    myKeyword = null
+                } else {
+                    myKeyword = room.secretWord;
+                }
+            }
 
-            safeCallback({
+            const myRole = player.isImpostor ? 'IMPOSTOR' : 'INNOCENT';
+
+            console.log('--- DEBUG GET GAME STATE ---');
+            console.log('ID del Jugador que pide estado:', userId.toString());
+            console.log('Estado de la Sala:', room.status);
+            console.log('Palabra Secreta de la Sala:', room.secretWord);
+            console.log('Rol Asignado al Jugador:', myRole);
+            console.log('Palabra Clave Asignada (myKeyword):', myKeyword);
+            console.log('----------------------------');
+
+            const allCategoryWords = room.categoryId.words;
+
+            res({
                 success: true,
                 room: {
                     ...getSafeRoomData(room),
-                    words: room.categoryId.words,
+                    words: allCategoryWords
+                    // Se asume que getSafeRoomData incluye los datos de la sala
                 },
                 myRole: myRole,
                 myKeyword: myKeyword,
@@ -170,64 +195,96 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
 
         } catch (error) {
             console.error("Error al obtener estado (Socket):", error);
-            safeCallback({ success: false, message: 'Error al obtener estado de la sala.' });
+            res({ success: false, message: 'Error al obtener estado de la sala.' });
         }
     });
 
 
     // --- 3. INICIAR PARTIDA ---
     socket.on('startGame', async (data, callback) => {
-        const safeCallback = createSafeCallback(callback);
+        const res = createSafeResponse(callback);
         const { roomId } = data;
         const roomCode = roomId.toUpperCase();
-        // console.log(`[DEBUG START] Inicia el manejo de startGame para sala: ${roomCode}`);
+
         try {
             const room = await Room.findOne({ roomId: roomCode }).populate('categoryId');
-            if (!room) { safeCallback({ success: false, message: "Sala no encontrada." }); return }
+
+            if (!room) { res({ success: false, message: "Sala no encontrada." }); return }
+
+            // Validaciones
             if (room.hostId.toString() !== userId.toString()) {
-                safeCallback({ success: false, message: "Solo el anfitrión puede iniciar la partida." });
+                res({ success: false, message: "Solo el anfitrión puede iniciar la partida." });
                 return;
             }
-            if (room.players.length !== room.maxPlayers) return safeCallback({ success: false, message: `Se necesitan ${room.maxPlayers} jugadores para empezar.` });
-            if (room.status !== 'LOBBY') return safeCallback({ success: false, message: "La partida ya ha comenzado." });
+            if (room.players.length !== room.maxPlayers) return res({ success: false, message: `Se necesitan ${room.maxPlayers} jugadores para empezar.` });
+            if (room.status !== 'LOBBY') return res({ success: false, message: "La partida ya ha comenzado." });
+
             console.log(`[START GAME] Validación OK. Iniciando lógica del juego.`);
+
             const players = room.players;
             const totalPlayers = players.length;
+
+            // 1. Lógica del Impostor y la Palabra Secreta
             const impostorIndex = Math.floor(Math.random() * totalPlayers);
-            const impostorId = players[impostorIndex].userId;
+            // ✅ CORRECCIÓN Impostor: Obtener el ID del impostor como STRING para la comparación
+            const impostorIdString = players[impostorIndex].userId.toString();
+
             const allWords = room.categoryId.words;
             const secretWordIndex = Math.floor(Math.random() * allWords.length);
             const secretWord = allWords[secretWordIndex];
 
+            console.log('--- DEBUG START GAME ---');
+            console.log('Total de jugadores:', totalPlayers);
+            console.log('Índice elegido para Impostor:', impostorIndex);
+            console.log('ID del Impostor (STRING):', impostorIdString);
+            console.log('Palabra Secreta:', secretWord);
+            console.log('Palabras de la Categoría:', allWords); // Verifica que el array no esté vacío
+            console.log('------------------------');
+
+            // 2. Actualizar el estado de la sala
             room.status = 'IN_GAME';
-            room.impostorId = impostorId;
+            // ✅ CORRECCIÓN Impostor: Asignar el ID del impostor en formato STRING a la sala
+            room.impostorId = impostorIdString;
             room.secretWord = secretWord;
             room.currentRound = 1;
+            room.status = 'IN_GAME';
 
-            const alivePlayerIds = players.map(p => p.userId.toString());
-            room.turnOrder = shuffleArray(alivePlayerIds);
-            room.currentTurnIndex = -1;
+            // const alivePlayerIds = players.map(p => p.userId.toString());
+            room.turnOrder = shuffleArray(room.players.map(p => p.userId.toString())); room.currentTurnIndex = -1;
             room.turnStartTime = new Date();
 
-            room.players = players.map(player => ({
-                ...player.toObject(),
-                isImpostor: player.userId.toString() === impostorId.toString(),
-                clueGiven: null,
-                vote: null,
-                guessGiven: false,
-            }));
+            // 3. Asignar el rol de Impostor a cada jugador
+            room.players = players.map(player => {
+                const playerUserIdString = player.userId.toString();
+
+                // Log para verificar la comparación de IDs en cada jugador
+                console.log(`[MAPEO] Jugador: ${player.username} (ID: ${playerUserIdString})`);
+                console.log(`[MAPEO] ¿Es Impostor? ${playerUserIdString === impostorIdString}`);
+
+                return ({
+                    ...player.toObject(),
+                    // ✅ Asignación de Rol
+                    isImpostor: playerUserIdString === impostorIdString,
+                    clueGiven: null,
+                    vote: null,
+                    guessGiven: false,
+                });
+            });
 
             await room.save();
 
-            safeCallback({
+            // Respuesta de éxito al cliente que inició la partida
+            res({
                 success: true,
                 message: "Partida iniciada. ¡Que comience la ronda 1!",
             });
 
+            // Iniciar el juego notificando a los otros jugadores y estableciendo el primer turno
             await setNextTurn(room);
+            io.to(roomCode).emit('game_started_update');
         } catch (error) {
             console.error("Error al iniciar la partida (Socket):", error);
-            safeCallback({ success: false, message: "Error interno del servidor al iniciar la partida." });
+            res({ success: false, message: "Error interno del servidor al iniciar la partida." });
         }
     });
 }

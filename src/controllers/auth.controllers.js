@@ -3,7 +3,6 @@ import jwt from "jsonwebtoken";
 
 const generateToken = (user) => {
   return jwt.sign(
-    // Firma el token con los datos que necesitará el socket
     { id: user._id, name: user.name },
     process.env.JWT_SECRET,
     { expiresIn: "1d" }
