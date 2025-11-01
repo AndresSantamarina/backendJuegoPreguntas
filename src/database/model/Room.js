@@ -20,16 +20,16 @@ const roomSchema = new Schema({
     },
     status: {
         type: String,
-        enum: ['LOBBY', 'IN_GAME', 'VOTING', 'IMPOSTOR_CHOOSING', 'GUESSING', 'IMPOSTOR_GUESSING' , 'FINISHED'],
+        enum: ['LOBBY', 'IN_GAME', 'VOTING', 'IMPOSTOR_CHOOSING', 'GUESSING', 'IMPOSTOR_GUESSING', 'FINISHED'],
         default: 'LOBBY'
     },
     players: {
         type: [playerSchema],
-        validate: [val => val.length <= 4, 'La sala está limitada a 4 jugadores']
+        validate: [val => val.length <= 8, 'La sala está limitada a 8 jugadores']
     },
     hostId: { type: String, required: true },
     currentRound: { type: Number, default: 0 },
-    maxPlayers: { type: Number, default: 4 },
+    maxPlayers: { type: Number, default: 8 },
 
     categoryId: {
         type: mongoose.Schema.Types.ObjectId,

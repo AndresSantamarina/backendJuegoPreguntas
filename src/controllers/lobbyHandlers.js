@@ -190,7 +190,10 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
                 res({ success: false, message: "Solo el anfitrión puede iniciar la partida." });
                 return;
             }
-            if (room.players.length !== room.maxPlayers) return res({ success: false, message: `Se necesitan ${room.maxPlayers} jugadores para empezar.` });
+            const MIN_PLAYERS = 3;
+            if (room.players.length < MIN_PLAYERS) {
+                return res({ success: false, message: `Se necesita un mínimo de ${MIN_PLAYERS} jugadores para empezar.` })
+            };
             if (room.status !== 'LOBBY') return res({ success: false, message: "La partida ya ha comenzado." });
 
             const players = room.players;
@@ -232,6 +235,39 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
         } catch (error) {
             console.error("Error al iniciar la partida (Socket):", error);
             res({ success: false, message: "Error interno del servidor al iniciar la partida." });
+        }
+    });
+    socket.on('cancelGame', async (data, callback) => {
+        const { roomId, userId } = data;
+        const roomCode = roomId.toUpperCase();
+
+        try {
+            // 1. Encontrar la sala
+            const room = await Room.findOne({ roomId: roomCode });
+
+            if (!room) {
+                return callback({ success: false, message: "Sala no encontrada." });
+            }
+
+            // 2. Verificar si el usuario es el host
+            if (room.hostId.toString() !== userId.toString()) {
+                return callback({ success: false, message: "Solo el anfitrión puede cancelar la sala." });
+            }
+
+            // 3. Emitir el evento de cierre a todos los jugadores antes de borrar
+            io.to(roomCode).emit('room_closed', {
+                message: `${room.players.find(p => p.userId === userId)?.username || "El anfitrión"} ha cancelado la partida.`
+            });
+
+            // 4. Eliminar la sala de la base de datos
+            await Room.deleteOne({ roomId: roomCode });
+
+            // 5. Devolver éxito al host
+            callback({ success: true, message: "Sala cancelada exitosamente." });
+
+        } catch (error) {
+            console.error("Error al cancelar la sala:", error);
+            callback({ success: false, message: "Error interno del servidor al cancelar la sala." });
         }
     });
 }
