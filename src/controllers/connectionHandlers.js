@@ -1,9 +1,8 @@
 import Room from "../database/model/Room.js";
-import {getSafeRoomData, setNextTurn, handleTwoPlayersGame } from './gameLogic.js'
+import { getSafeRoomData, setNextTurn, handleTwoPlayersGame } from './gameLogic.js'
 
 export const registerConnectionHandlers = (socket, io, userId, userName) => {
     socket.on('disconnect', async () => {
-        // console.log(`Socket Desconectado: ${socket.id} (User: ${userName})`);
         try {
             const room = await Room.findOne({ "players.userId": userId, status: { $in: ['LOBBY', 'IN_GAME'] } });
 
@@ -17,9 +16,6 @@ export const registerConnectionHandlers = (socket, io, userId, userName) => {
                     io.to(room.roomId).emit(`player_update`, {
                         players: getSafeRoomData(room).players
                     });
-
-                    // console.log(`Jugador ${userName} eliminado del lobby ${room.roomId}.`);
-
                 } else if (room.status === 'IN_GAME') {
                     player.isAlive = false;
                     player.lives = 0;

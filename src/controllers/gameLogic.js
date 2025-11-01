@@ -25,7 +25,7 @@ const getSafeRoomData = (room) => {
         currentTurnIndex: room.currentTurnIndex,
         turnOrder: room.turnOrder,
         turnStartTime: room.turnStartTime,
-        turnDuration: TURN_TIME_MS, // Asumiendo que es constante
+        turnDuration: TURN_TIME_MS,
 
         players: room.players.map(p => ({
             id: p.userId.toString(),
@@ -35,7 +35,7 @@ const getSafeRoomData = (room) => {
             isAlive: p.isAlive,
             clueGiven: p.clueGiven,
             guessGiven: p.guessGiven,
-            isImpostor: p.isImpostor // ¡Esto es necesario para que el frontend lo visualice!
+            isImpostor: p.isImpostor
         })),
     }
 };
@@ -77,10 +77,6 @@ const setNextTurn = async (room, isTimeout = false) => {
     if (room.status === 'IN_GAME') {
         let nextPlayerIndex = -1;
         let startIndex;
-        // 🚨 LOG 1: Verificar el estado del turno y el índice inicial
-        console.log(`[SET_TURN] Estado de la Sala: ${room.status}, Turno Anterior: ${room.currentTurnIndex}`);
-        console.log(`[SET_TURN] turnOrder completo: ${room.turnOrder.map(id => id.toString())}`);
-        // let startIndex = (room.currentTurnIndex + 1) % room.turnOrder.length;
 
         if (room.currentTurnIndex === -1) {
             startIndex = 0;
@@ -94,20 +90,10 @@ const setNextTurn = async (room, isTimeout = false) => {
             const playerId = room.turnOrder[currentIndex];
             const playerIdString = playerId.toString();
             const player = room.players.find(p => p.userId.toString() === playerIdString);
-            if (player) {
-                console.log(`[SET_TURN] Iteración ${i} (Índice ${currentIndex}):`);
-                console.log(`  -> ID de turnOrder (playerIdString): ${playerIdString} (Tipo: ${typeof playerIdString})`);
-                console.log(`  -> ID del Jugador (p.userId.toString()): ${player.userId.toString()} (Tipo: ${typeof player.userId.toString()})`);
-                console.log(`  -> ¿Está Vivo? ${player.isAlive}`);
-                console.log(`  -> Valor de clueGiven: ${player.clueGiven} (Tipo: ${typeof player.clueGiven})`);
-            } else {
-                console.log(`[SET_TURN] Error: No se encontró el jugador con ID ${playerIdString} en room.players.`);
-            }
             if (player && player.isAlive && player.clueGiven === null) {
                 nextPlayerIndex = currentIndex;
                 break;
             }
-
             currentIndex = (currentIndex + 1) % room.turnOrder.length;
         }
 
@@ -178,10 +164,10 @@ const handleTwoPlayersGame = async (room) => {
 
     if (room.turnOrder.length !== 2) {
         console.error("Error FATAL: handleTwoPlayersGame tiene más de 2 jugadores vivos en turnOrder.");
-        return false; // Evitar iniciar la fase de adivinanza
+        return false;
     }
 
-    room.currentTurnIndex = 0; // Se fuerza a 0 para el inicio
+    room.currentTurnIndex = 0;
     await room.save();
 
     const category = await Category.findById(room.categoryId);
@@ -214,7 +200,6 @@ const rotateImpostor = (players) => {
 
 
 const resetRoundState = async (room) => {
-    console.log('*** EJECUTANDO resetRoundState: Limpieza y rotación. ***');
     const alivePlayers = room.players.filter(p => p.isAlive);
     const roomCode = room.roomId;
 
@@ -244,27 +229,13 @@ const resetRoundState = async (room) => {
 
     if (!newCategoryArray || newCategoryArray.length === 0) {
         console.error("FATAL: No se pudo cargar la categoría para la rotación. Usando la anterior.");
-        // Si no se encuentra una nueva, el juego continúa con la palabra anterior
     } else {
-        // El resultado de aggregate es un array de objetos planos, usamos el primero
         const selectedCategory = newCategoryArray[0];
         const allWords = selectedCategory.words;
-
-        // 3.1 Actualizar ID de Categoría en la Sala
         room.categoryId = selectedCategory._id;
-
-        // 3.2 Seleccionar y asignar la Palabra Secreta
         const shuffledWords = shuffleArray([...allWords]);
-
-        // 🔑 Guardar la lista COMPLETA de palabras (Necesario para el modo adivinanza)
         room.words = allWords;
-
-        // Asignar la nueva palabra clave
         room.secretWord = shuffledWords[0];
-
-        // ⚠️ Si utilizas 'impostorWord' en algún lugar, debes reintroducirlo aquí. 
-        // Si el impostor simplemente no conoce la palabra, basta con 'secretWord'.
-        // room.impostorWord = shuffledWords[1]; 
     }
     room.votes = [];
     room.impostorTarget = null;
@@ -277,7 +248,7 @@ const resetRoundState = async (room) => {
         message: "Nueva ronda, ¡a jugar!"
     });
 
-    io.to(room.roomId).emit('game_started_update'); // <--- ¡Añade esto!
+    io.to(room.roomId).emit('game_started_update');
 
     return false;
 };

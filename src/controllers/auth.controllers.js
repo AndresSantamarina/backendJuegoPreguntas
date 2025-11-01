@@ -30,13 +30,6 @@ export const login = async (req, res) => {
     if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({ message: "Credenciales inválidas" });
     }
-
-    // console.log('--- OBJETO USUARIO ANTES DE GENERAR TOKEN ---');
-    // console.log({
-    //   _id: user._id,
-    //   name: user.name
-    // });
-    // console.log('-------------------------------------------');
     const token = generateToken(user);
     res.status(200).json({ user: { id: user._id, name: user.name }, token });
   } catch (error) {

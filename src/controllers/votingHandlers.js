@@ -10,7 +10,6 @@ export const registerVotingHandlers = (socket, io, userId, userName) => {
     socket.on('submitVote', async (data, callback) => {
         let roundWasReset = false;
         const resetVotesAndStartImpostorChoosing = (room, roomCode, message) => {
-            console.log('Limpiando votos. Status: IMPOSTOR_CHOOSING.');
             room.players.forEach(p => { p.vote = null; });
             room.votes = [];
             room.status = 'IMPOSTOR_CHOOSING';
@@ -22,7 +21,6 @@ export const registerVotingHandlers = (socket, io, userId, userName) => {
         };
 
         const resetAndEmitRound = async (room, roomCode, baseMessage) => {
-            console.log('Reiniciando ronda (resetRoundState). Status: IN_GAME.');
             const isTwoPlayerMode = await resetRoundState(room);
             roundWasReset = true;
 
@@ -52,15 +50,11 @@ export const registerVotingHandlers = (socket, io, userId, userName) => {
 
             voter.vote = targetId;
             room.votes.push({ voterId: userId, targetId });
-            console.log('Jugador', voter.username, 'votó por', target.username);
-
 
             const alivePlayers = room.players.filter(p => p.isAlive);
             const votesSubmitted = alivePlayers.filter(p => p.vote !== null).length;
 
             await room.save();
-            console.log('Estado final de los votos ANTES de salir:', room.players.map(p => ({ user: p.username, vote: p.vote })));
-
             let outcomeMessage = "Voto registrado. Esperando a los demás jugadores...";
 
             if (votesSubmitted === alivePlayers.length) {
@@ -108,10 +102,9 @@ export const registerVotingHandlers = (socket, io, userId, userName) => {
                         room.votes = [];
 
                         io.to(roomCode).emit('guessing_impostor_started', {
-                            // ...getSafeRoomData(room),
-                            words: room.words, // <--- Esto es lo que necesita el frontend
-                            message: outcomeMessage, // Pasa el mensaje al Swal
-                            status: 'IMPOSTOR_GUESSING' // Asegura que el status vaya en los datosasd
+                            words: room.words,
+                            message: outcomeMessage,
+                            status: 'IMPOSTOR_GUESSING'
                         });
 
                         roundWasReset = true;
@@ -135,22 +128,18 @@ export const registerVotingHandlers = (socket, io, userId, userName) => {
                 }
 
                 await room.save();
-                console.log('Estado final de los votos ANTES de salir:', room.players.map(p => ({ user: p.username, vote: p.vote })));
             }
 
             if (room.status !== 'VOTING') {
-                // Si la fase ha cambiado (IMPOSTOR_CHOOSING, IMPOSTOR_GUESSING, IN_GAME, FINISHED),
-                // NO enviamos 'room' en la respuesta. El frontend debe esperar el broadcast (io.to(roomCode).emit).
                 safeCallback({
                     success: true,
                     message: outcomeMessage,
                 });
             } else {
-                // Si la fase es AÚN 'VOTING' (votación parcial), enviamos el estado actualizado.
                 safeCallback({
                     success: true,
                     message: outcomeMessage,
-                    room: getSafeRoomData(room) // El frontend (useGameSocket) lo ignorará, solo actualizará 'myVoteTarget'.
+                    room: getSafeRoomData(room)
                 });
             }
         } catch (error) {

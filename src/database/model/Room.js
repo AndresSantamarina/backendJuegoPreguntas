@@ -43,13 +43,9 @@ const roomSchema = new Schema({
     secretWord: { type: String, default: null },
     impostorId: { type: String, default: null },
 
-    // Nuevo: Almacena el orden de los turnos de los jugadores (array de userIds)
     turnOrder: { type: [String], default: [] },
-    // Nuevo: Índice del jugador al que le toca ahora en `turnOrder`
     currentTurnIndex: { type: Number, default: 0 },
-    // Nuevo: Momento en que empezó el turno para el timer
     turnStartTime: { type: Date, default: null },
-    // Nuevo: Array para guardar los timers de turno
     turnTimers: { type: [Object], default: [] },
 
     votes: [{

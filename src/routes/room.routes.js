@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { protect } from "../middleware/authMiddleware.js";
-import { getRoomStatus, listCategories } from "../controllers/room.controllers.js"; // Solo quedan estas funciones Express/REST
+import { getRoomStatus, listCategories } from "../controllers/room.controllers.js";
 
 const router = Router();
 

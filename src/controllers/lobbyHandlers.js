@@ -3,9 +3,6 @@ import Category from "../database/model/Category.js"
 import { generateRoomId, getSafeRoomData, shuffleArray, setNextTurn } from './gameLogic.js'
 
 export const registerLobbyHandlers = (socket, io, userId, userName) => {
-
-    // Función de respuesta local para garantizar que el callback de Socket.io se ejecute solo si existe.
-    // Esto previene el "TypeError: callback is not a function" en el frontend.
     const createSafeResponse = (callback) => (response) => {
         if (typeof callback === 'function') {
             callback(response);
@@ -64,7 +61,6 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
                 players: [hostPlayer],
                 categoryId: selectedCategory._id,
                 status: 'LOBBY',
-                // maxPlayers se asume que se establece aquí o en el esquema (usando un valor por defecto)
             });
 
             await newRoom.save();
@@ -100,7 +96,6 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
                 return res({ success: true, roomId: roomCode, room: getSafeRoomData(room), message: "Ya estás en esta sala." });
             }
 
-            // Asumiendo que maxPlayers tiene un valor por defecto razonable o está definido
             if (room.players.length >= room.maxPlayers) {
                 return res({ success: false, message: `La sala está llena (${room.maxPlayers}/${room.maxPlayers}).` });
             }
@@ -116,14 +111,11 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
             };
 
             room.players.push(newPlayer);
-            console.log('Jugadores ANTES de guardar:', room.players.map(p => p.username));
             await room.save();
 
             room = await Room.findOne({ roomId: roomCode });
-            console.log('Jugadores DESPUÉS de recargar (FRESH):', room.players.map(p => p.username));
 
             socket.join(roomCode);
-            console.log('Emitiendo a sala', roomCode, 'con', room.players.length, 'jugadores.');
             io.to(roomCode).emit(`player_update`, {
                 ...getSafeRoomData(room),
                 message: `${userName} se ha unido al lobby.`
@@ -135,8 +127,6 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
                 room: getSafeRoomData(room),
                 message: `Te has unido a la sala ${roomCode}.`
             });
-            console.log('Callback a', userName, 'con estado de sala:', getSafeRoomData(room).players.map(p => p.username));
-
         } catch (error) {
             console.error("Error al unirse a sala (Socket):", error);
             res({ success: false, message: "Error interno al unirse a la sala." });
@@ -149,7 +139,6 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
         const roomCode = roomId.toUpperCase();
 
         try {
-            // Asegúrate de poblar categoryId para tener acceso a las palabras
             const room = await Room.findOne({ roomId: roomCode }).populate('categoryId');
 
             if (!room) { res({ success: false, message: 'Sala no encontrada.' }); return }
@@ -159,7 +148,6 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
 
             socket.join(roomCode);
 
-            // 💡 Verificación de la Palabra Clave:
             let myKeyword = null;
             if (room.status === 'IN_GAME') {
                 if (player.isImpostor) {
@@ -170,15 +158,6 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
             }
 
             const myRole = player.isImpostor ? 'IMPOSTOR' : 'INNOCENT';
-
-            console.log('--- DEBUG GET GAME STATE ---');
-            console.log('ID del Jugador que pide estado:', userId.toString());
-            console.log('Estado de la Sala:', room.status);
-            console.log('Palabra Secreta de la Sala:', room.secretWord);
-            console.log('Rol Asignado al Jugador:', myRole);
-            console.log('Palabra Clave Asignada (myKeyword):', myKeyword);
-            console.log('----------------------------');
-
             const allCategoryWords = room.categoryId.words;
 
             res({
@@ -186,7 +165,6 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
                 room: {
                     ...getSafeRoomData(room),
                     words: allCategoryWords
-                    // Se asume que getSafeRoomData incluye los datos de la sala
                 },
                 myRole: myRole,
                 myKeyword: myKeyword,
@@ -199,8 +177,6 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
         }
     });
 
-
-    // --- 3. INICIAR PARTIDA ---
     socket.on('startGame', async (data, callback) => {
         const res = createSafeResponse(callback);
         const { roomId } = data;
@@ -210,8 +186,6 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
             const room = await Room.findOne({ roomId: roomCode }).populate('categoryId');
 
             if (!room) { res({ success: false, message: "Sala no encontrada." }); return }
-
-            // Validaciones
             if (room.hostId.toString() !== userId.toString()) {
                 res({ success: false, message: "Solo el anfitrión puede iniciar la partida." });
                 return;
@@ -219,52 +193,26 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
             if (room.players.length !== room.maxPlayers) return res({ success: false, message: `Se necesitan ${room.maxPlayers} jugadores para empezar.` });
             if (room.status !== 'LOBBY') return res({ success: false, message: "La partida ya ha comenzado." });
 
-            console.log(`[START GAME] Validación OK. Iniciando lógica del juego.`);
-
             const players = room.players;
             const totalPlayers = players.length;
-
-            // 1. Lógica del Impostor y la Palabra Secreta
             const impostorIndex = Math.floor(Math.random() * totalPlayers);
-            // ✅ CORRECCIÓN Impostor: Obtener el ID del impostor como STRING para la comparación
             const impostorIdString = players[impostorIndex].userId.toString();
-
             const allWords = room.categoryId.words;
             const secretWordIndex = Math.floor(Math.random() * allWords.length);
             const secretWord = allWords[secretWordIndex];
 
-            console.log('--- DEBUG START GAME ---');
-            console.log('Total de jugadores:', totalPlayers);
-            console.log('Índice elegido para Impostor:', impostorIndex);
-            console.log('ID del Impostor (STRING):', impostorIdString);
-            console.log('Palabra Secreta:', secretWord);
-            console.log('Palabras de la Categoría:', allWords); // Verifica que el array no esté vacío
-            console.log('------------------------');
-
-            // 2. Actualizar el estado de la sala
             room.status = 'IN_GAME';
-            // ✅ CORRECCIÓN Impostor: Asignar el ID del impostor en formato STRING a la sala
             room.impostorId = impostorIdString;
             room.secretWord = secretWord;
             room.words = allWords;
             room.currentRound = 1;
             room.status = 'IN_GAME';
-
-            // const alivePlayerIds = players.map(p => p.userId.toString());
             room.turnOrder = shuffleArray(room.players.map(p => p.userId.toString())); room.currentTurnIndex = -1;
             room.turnStartTime = new Date();
-
-            // 3. Asignar el rol de Impostor a cada jugador
             room.players = players.map(player => {
                 const playerUserIdString = player.userId.toString();
-
-                // Log para verificar la comparación de IDs en cada jugador
-                console.log(`[MAPEO] Jugador: ${player.username} (ID: ${playerUserIdString})`);
-                console.log(`[MAPEO] ¿Es Impostor? ${playerUserIdString === impostorIdString}`);
-
                 return ({
                     ...player.toObject(),
-                    // ✅ Asignación de Rol
                     isImpostor: playerUserIdString === impostorIdString,
                     clueGiven: null,
                     vote: null,
@@ -274,13 +222,11 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
 
             await room.save();
 
-            // Respuesta de éxito al cliente que inició la partida
             res({
                 success: true,
                 message: "Partida iniciada. ¡Que comience la ronda 1!",
             });
 
-            // Iniciar el juego notificando a los otros jugadores y estableciendo el primer turno
             await setNextTurn(room);
             io.to(roomCode).emit('game_started_update');
         } catch (error) {
