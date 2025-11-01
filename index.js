@@ -84,8 +84,10 @@ io.use(async (socket, next) => {
 
 initSocketIO(io);
 
-httpServer.listen(port, () => {
-  console.log('Servidor corriendo en el puerto ' + port);
-});
+// httpServer.listen(port, () => {
+//   console.log('Servidor corriendo en el puerto ' + port);
+// });
 
 export { io };
+
+export default httpServer
