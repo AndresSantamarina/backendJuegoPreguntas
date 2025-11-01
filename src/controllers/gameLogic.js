@@ -164,7 +164,7 @@ const handleTwoPlayersGame = async (room) => {
 
     clearRoomTimer(roomCode);
 
-    room.currentTurnIndex = -1;
+    room.currentTurnIndex = 0;
     room.turnStartTime = null;
     room.players.forEach(p => {
         p.clueGiven = null;
@@ -172,8 +172,16 @@ const handleTwoPlayersGame = async (room) => {
         p.guessGiven = false;
     });
     room.votes = [];
-    room.turnOrder = shuffleArray(alivePlayers.map(p => p.userId.toString()));
+    room.turnOrder = room.players
+        .filter(p => p.isAlive)
+        .map(p => p.userId.toString());
 
+    if (room.turnOrder.length !== 2) {
+        console.error("Error FATAL: handleTwoPlayersGame tiene más de 2 jugadores vivos en turnOrder.");
+        return false; // Evitar iniciar la fase de adivinanza
+    }
+
+    room.currentTurnIndex = 0; // Se fuerza a 0 para el inicio
     await room.save();
 
     const category = await Category.findById(room.categoryId);

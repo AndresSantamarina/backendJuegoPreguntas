@@ -108,9 +108,10 @@ export const registerVotingHandlers = (socket, io, userId, userName) => {
                         room.votes = [];
 
                         io.to(roomCode).emit('guessing_impostor_started', {
-                            ...getSafeRoomData(room),
+                            // ...getSafeRoomData(room),
+                            words: room.words, // <--- Esto es lo que necesita el frontend
                             message: outcomeMessage, // Pasa el mensaje al Swal
-                            status: 'IMPOSTOR_GUESSING' // Asegura que el status vaya en los datos
+                            status: 'IMPOSTOR_GUESSING' // Asegura que el status vaya en los datosasd
                         });
 
                         roundWasReset = true;
