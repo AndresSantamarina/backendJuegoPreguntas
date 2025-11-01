@@ -230,8 +230,37 @@ const resetRoundState = async (room) => {
         p.vote = null;
         p.guessGiven = false;
     });
+
+
+    const newCategoryArray = await Category.aggregate([{ $sample: { size: 1 } }]);
+
+    if (!newCategoryArray || newCategoryArray.length === 0) {
+        console.error("FATAL: No se pudo cargar la categoría para la rotación. Usando la anterior.");
+        // Si no se encuentra una nueva, el juego continúa con la palabra anterior
+    } else {
+        // El resultado de aggregate es un array de objetos planos, usamos el primero
+        const selectedCategory = newCategoryArray[0];
+        const allWords = selectedCategory.words;
+
+        // 3.1 Actualizar ID de Categoría en la Sala
+        room.categoryId = selectedCategory._id;
+
+        // 3.2 Seleccionar y asignar la Palabra Secreta
+        const shuffledWords = shuffleArray([...allWords]);
+
+        // 🔑 Guardar la lista COMPLETA de palabras (Necesario para el modo adivinanza)
+        room.words = allWords;
+
+        // Asignar la nueva palabra clave
+        room.secretWord = shuffledWords[0];
+
+        // ⚠️ Si utilizas 'impostorWord' en algún lugar, debes reintroducirlo aquí. 
+        // Si el impostor simplemente no conoce la palabra, basta con 'secretWord'.
+        // room.impostorWord = shuffledWords[1]; 
+    }
     room.votes = [];
     room.impostorTarget = null;
+
     await room.save();
     await setNextTurn(room);
 

@@ -69,4 +69,97 @@ export const registerImpostorHandlers = (socket, io, userId, userName) => {
             safeCallback({ success: false, message: "Error interno del servidor al procesar el ataque." });
         }
     });
+    socket.on('impostorSubmitGuess', async (data, callback) => {
+        const safeCallback = createSafeCallback(callback);
+        const { roomId, guess } = data;
+        const roomCode = roomId.toUpperCase();
+        let outcomeMessage = '';
+        let roundWasReset = false;
+
+        const resetAndEmitRound = async (room, roomCode, baseMessage) => {
+            const isTwoPlayerMode = await resetRoundState(room);
+            roundWasReset = true;
+            if (!isTwoPlayerMode) {
+                io.to(roomCode).emit('round_new', {
+                    ...getSafeRoomData(room),
+                    message: baseMessage + ` La ronda ${room.currentRound} comienza.`
+                });
+            }
+        };
+
+        try {
+            let room = await Room.findOne({ roomId: roomCode });
+            if (!room) return safeCallback({ success: false, message: "Sala no encontrada." });
+            if (room.status !== 'IMPOSTOR_GUESSING') return safeCallback({ success: false, message: "No es el momento de adivinar." });
+
+            const impostorPlayer = room.players.find(p => p.userId.toString() === userId.toString() && p.isImpostor);
+            if (!impostorPlayer) return safeCallback({ success: false, message: "No eres el Impostor activo." });
+
+            const correctWord = room.secretWord;
+
+            if (guess.toLowerCase() === correctWord.toLowerCase()) {
+                // ACIERTO: Conserva su vida y la ronda continúa
+                outcomeMessage = `¡Increíble! ${impostorPlayer.username} (Impostor) ha adivinado la palabra clave: **${correctWord}**. Conserva su vida.`;
+                // No se quita la vida
+                await resetAndEmitRound(room, roomCode, outcomeMessage);
+
+            } else {
+                // FALLO: Pierde una vida
+                impostorPlayer.lives -= 1;
+                outcomeMessage = `¡Vaya! La adivinanza de ${impostorPlayer.username} fue incorrecta. Pierde una vida. La palabra era: **${correctWord}**. Vidas restantes: ${impostorPlayer.lives}.`;
+
+                if (impostorPlayer.lives <= 0) {
+                    // 💀 El Impostor muere, pero el juego NO termina automáticamente.
+                    impostorPlayer.isAlive = false;
+                    outcomeMessage += ` El Impostor (${impostorPlayer.username}) ha sido **eliminado**.`;
+                }
+
+                // --- 🚀 LÓGICA DE CONTINUACIÓN DE JUEGO (REGLA MODIFICADA) ---
+
+                const remainingAlivePlayers = room.players.filter(p => p.isAlive).length;
+
+                if (remainingAlivePlayers === 1) {
+                    // Solo queda UN jugador (el único ganador)
+                    const winnerPlayer = room.players.find(p => p.isAlive);
+                    const winnerRole = winnerPlayer.isImpostor ? 'Impostor' : 'Innocents';
+
+                    room.status = 'FINISHED';
+                    outcomeMessage += ` ¡Solo queda ${winnerPlayer.username}! El juego termina. Ganan los **${winnerRole}**.`;
+
+                    io.to(roomCode).emit('game_finished', {
+                        winner: winnerRole,
+                        message: outcomeMessage,
+                        finalRoomState: getSafeRoomData(room)
+                    });
+
+                } else if (remainingAlivePlayers <= 0) {
+                    // Caso de empate (raro, pero posible si 2 pierden la vida a la vez)
+                    room.status = 'FINISHED';
+                    outcomeMessage += ` El juego termina en **empate**.`;
+
+                    io.to(roomCode).emit('game_finished', {
+                        winner: 'Tie',
+                        message: outcomeMessage,
+                        finalRoomState: getSafeRoomData(room)
+                    });
+
+                } else {
+                    // El juego continúa con los jugadores restantes
+                    await resetAndEmitRound(room, roomCode, outcomeMessage);
+                }
+            }
+
+            await room.save();
+
+            if (room.status !== 'FINISHED' && !roundWasReset) {
+                room = await Room.findOne({ roomId: roomCode }); // Re-obtener estado si el reset no lo hizo
+            }
+
+            safeCallback({ success: true, message: outcomeMessage, currentStatus: room.status });
+
+        } catch (error) {
+            console.error("Error en submitGuess:", error);
+            safeCallback({ success: false, message: "Error interno del servidor al procesar la adivinanza." });
+        }
+    });
 };

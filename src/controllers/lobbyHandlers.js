@@ -246,6 +246,7 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
             // ✅ CORRECCIÓN Impostor: Asignar el ID del impostor en formato STRING a la sala
             room.impostorId = impostorIdString;
             room.secretWord = secretWord;
+            room.words = allWords;
             room.currentRound = 1;
             room.status = 'IN_GAME';
 

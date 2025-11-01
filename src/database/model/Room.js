@@ -20,7 +20,7 @@ const roomSchema = new Schema({
     },
     status: {
         type: String,
-        enum: ['LOBBY', 'IN_GAME', 'VOTING', 'IMPOSTOR_CHOOSING', 'GUESSING', 'FINISHED'],
+        enum: ['LOBBY', 'IN_GAME', 'VOTING', 'IMPOSTOR_CHOOSING', 'GUESSING', 'IMPOSTOR_GUESSING' , 'FINISHED'],
         default: 'LOBBY'
     },
     players: {
@@ -35,6 +35,10 @@ const roomSchema = new Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'category',
         required: true
+    },
+    words: {
+        type: [String],
+        default: []
     },
     secretWord: { type: String, default: null },
     impostorId: { type: String, default: null },

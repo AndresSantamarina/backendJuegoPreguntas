@@ -102,24 +102,20 @@ export const registerVotingHandlers = (socket, io, userId, userName) => {
                 } else if (mostVotedPlayer) {
 
                     if (mostVotedPlayer.isImpostor) {
-                        mostVotedPlayer.lives -= 1;
-                        outcomeMessage = `¡Encontrado! El impostor (${mostVotedPlayer.username}) pierde una vida. Vidas restantes: ${mostVotedPlayer.lives}.`;
+                        outcomeMessage = `¡Encontrado! El impostor (${mostVotedPlayer.username}) ha sido descubierto. ¡Tiene una oportunidad para adivinar la palabra clave!`;
+                        room.status = 'IMPOSTOR_GUESSING';
+                        room.players.forEach(p => { p.vote = null; });
+                        room.votes = [];
 
-                        if (mostVotedPlayer.lives <= 0) {
-                            mostVotedPlayer.isAlive = false;
-                            room.status = 'FINISHED';
-                            outcomeMessage += " Los **Inocentes** ganan.";
+                        io.to(roomCode).emit('guessing_impostor_started', {
+                            ...getSafeRoomData(room),
+                            message: outcomeMessage, // Pasa el mensaje al Swal
+                            status: 'IMPOSTOR_GUESSING' // Asegura que el status vaya en los datos
+                        });
 
-                            io.to(roomCode).emit('game_finished', {
-                                winner: 'Innocents',
-                                message: outcomeMessage,
-                                finalRoomState: getSafeRoomData(room)
-                            });
-                        } else {
-                            await resetAndEmitRound(room, roomCode, outcomeMessage);
-                        }
-
-                    } else {
+                        roundWasReset = true;
+                    }
+                    else {
                         outcomeMessage = `¡Voto fallido! ${mostVotedPlayer.username} es Inocente. El Impostor debe elegir una víctima.`;
                         resetVotesAndStartImpostorChoosing(room, roomCode, outcomeMessage);
                         roundWasReset = true;
@@ -141,18 +137,21 @@ export const registerVotingHandlers = (socket, io, userId, userName) => {
                 console.log('Estado final de los votos ANTES de salir:', room.players.map(p => ({ user: p.username, vote: p.vote })));
             }
 
-            if (roundWasReset || room.status !== 'VOTING') {
-                room = await Room.findOne({ roomId: roomCode });
+            if (room.status !== 'VOTING') {
+                // Si la fase ha cambiado (IMPOSTOR_CHOOSING, IMPOSTOR_GUESSING, IN_GAME, FINISHED),
+                // NO enviamos 'room' en la respuesta. El frontend debe esperar el broadcast (io.to(roomCode).emit).
                 safeCallback({
                     success: true,
                     message: outcomeMessage,
-                    room: getSafeRoomData(room)
                 });
             } else {
-                safeCallback({ success: true, message: "Voto registrado." });
+                // Si la fase es AÚN 'VOTING' (votación parcial), enviamos el estado actualizado.
+                safeCallback({
+                    success: true,
+                    message: outcomeMessage,
+                    room: getSafeRoomData(room) // El frontend (useGameSocket) lo ignorará, solo actualizará 'myVoteTarget'.
+                });
             }
-
-
         } catch (error) {
             console.error("Error al votar (Socket):", error);
             safeCallback({ success: false, message: "Error interno del servidor al procesar el voto." });
