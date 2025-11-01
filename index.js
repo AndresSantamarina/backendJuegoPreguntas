@@ -17,10 +17,20 @@ const app = express();
 const httpServer = http.createServer(app);
 const port = process.env.PORT || 4000;
 
+const allowedOrigins = [
+  "https://juego-preguntas-andres.netlify.app",
+];
+
 app.use(cors({
-  origin: "*",
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 
 app.use(morgan('dev'))
@@ -37,11 +47,10 @@ app.use('/api/impostor', roomRouter)
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: "https://juego-preguntas-andres.netlify.app",
     methods: ["GET", "POST"]
   }
 });
-
 
 const verifyJwt = (token) => {
   try {
