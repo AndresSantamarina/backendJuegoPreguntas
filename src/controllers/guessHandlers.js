@@ -41,7 +41,7 @@ export const registerGuessHandlers = (socket, io, userId, userName) => {
             room.currentTurnIndex = (room.currentTurnIndex + 1) % room.turnOrder.length;
             await room.save();
 
-            const isCorrect = guessedWord === room.secretWord;
+            const isCorrect = guessedWord === room.secretWord.toUpperCase(); //MODIFICACION
             const otherPlayer = room.players.find(p => p.userId.toString() !== userId.toString() && p.isAlive);
             const allGuessed = room.players.filter(p => p.isAlive).every(p => p.guessGiven);
 

@@ -273,8 +273,8 @@ const resetRoundState = async (room) => {
         const allWords = selectedCategory.words;
         room.categoryId = selectedCategory._id;
         const shuffledWords = shuffleArray([...allWords]);
-        room.words = allWords;
-        room.secretWord = shuffledWords[0];
+        room.words = allWords.map(w => w.toUpperCase()); // <-- Normalizar aquí
+        room.secretWord = shuffledWords[0].toUpperCase(); // <-- Normalizar aquí
     }
     room.votes = [];
     room.impostorTarget = null;
