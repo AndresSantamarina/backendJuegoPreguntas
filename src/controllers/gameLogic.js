@@ -116,10 +116,9 @@ const setNextTurn = async (room, isTimeout = false) => {
             }, TURN_TIME_MS);
 
         } else {
-            room.status = 'VOTING';
-            room.votes = [];
-            room.currentTurnIndex = -1;
-            room.turnStartTime = null;
+            // --- INICIO DE LA MODIFICACIÓN ---
+
+            // 1. Registrar las pistas de la ronda ANTES de cambiar el estado
             room.roundHistory.push({
                 round: room.currentRound,
                 clues: room.players
@@ -127,12 +126,52 @@ const setNextTurn = async (room, isTimeout = false) => {
                     .map(p => ({ userId: p.userId, clue: p.clueGiven }))
             });
 
+            // 2. Emitir un evento intermedio para mostrar las pistas finales
+            const clueRevealDuration = 5000; // 5 segundos para que vean las pistas
+
+            // Emitir un evento para notificar que las pistas están completas y que la votación está por empezar
+            io.to(roomCode).emit('clues_complete_standby', {
+                ...getSafeRoomData(room),
+                message: "¡Pistas completas! Revisa las palabras antes de votar...",
+                delay: clueRevealDuration
+            });
+
+            // 3. Establecer un temporizador para hacer el cambio real a VOTING
+            ROOM_TIMERS[roomCode] = setTimeout(async () => {
+                const updatedRoom = await Room.findById(room._id); // Recargar por si hay cambios concurrentes
+
+                updatedRoom.status = 'VOTING';
+                updatedRoom.votes = [];
+                updatedRoom.currentTurnIndex = -1;
+                updatedRoom.turnStartTime = null;
+
+                await updatedRoom.save();
+
+                // 4. Emitir el evento de inicio de votación DESPUÉS del retraso
+                io.to(roomCode).emit('voting_started', {
+                    ...getSafeRoomData(updatedRoom),
+                    message: "¡Fin de las pistas! Comienza la votación."
+                });
+
+            }, clueRevealDuration);
+
+
+            // Comentar o eliminar este código anterior:
+            /*
+            room.status = 'VOTING';
+            room.votes = [];
+            room.currentTurnIndex = -1;
+            room.turnStartTime = null;
+
             await room.save();
 
             io.to(roomCode).emit('voting_started', {
                 ...getSafeRoomData(room),
                 message: "¡Fin de las pistas! Comienza la votación."
             });
+            */
+
+            // --- FIN DE LA MODIFICACIÓN ---
         }
     }
 };
