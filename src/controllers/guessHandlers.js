@@ -50,7 +50,7 @@ export const registerGuessHandlers = (socket, io, userId, userName) => {
             if (isCorrect) {
                 room.status = 'FINISHED';
                 const winnerRole = player.isImpostor ? 'Impostor' : 'Innocents';
-                outcomeMessage = `¡${player.username} ha adivinado la palabra clave: ${room.secretWord}! El bando **${winnerRole}** gana.`;
+                outcomeMessage = `¡${player.username} ha adivinado la palabra clave: ${room.secretWord}! ${player.username} gana.`;
 
                 io.to(roomCode).emit('game_finished', {
                     winner: winnerRole,
@@ -71,13 +71,13 @@ export const registerGuessHandlers = (socket, io, userId, userName) => {
 
                 io.to(roomCode).emit('guess_submitted', {
                     ...safeRoomData,
-                    message: outcomeMessage + ` Ahora es turno de **${nextTurnUsername}**.`
+                    message: outcomeMessage + ` Ahora es turno de ${nextTurnUsername}.`
                 });
 
             } else {
                 const nextPlayer = room.players.find(p => p.userId.toString() === room.turnOrder[room.currentTurnIndex].toString()).username;
 
-                outcomeMessage = `${player.username} falló. Es turno de **${nextPlayer}**.`;
+                outcomeMessage = `${player.username} falló. Es turno de ${nextPlayer}.`;
                 io.to(roomCode).emit('guess_submitted', {
                     ...getSafeRoomData(room),
                     message: outcomeMessage
@@ -90,6 +90,4 @@ export const registerGuessHandlers = (socket, io, userId, userName) => {
             safeCallback({ success: false, message: "Error interno del servidor al enviar la adivinanza." });
         }
     });
-
-
 }

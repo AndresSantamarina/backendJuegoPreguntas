@@ -242,27 +242,22 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
         const roomCode = roomId.toUpperCase();
 
         try {
-            // 1. Encontrar la sala
             const room = await Room.findOne({ roomId: roomCode });
 
             if (!room) {
                 return callback({ success: false, message: "Sala no encontrada." });
             }
 
-            // 2. Verificar si el usuario es el host
             if (room.hostId.toString() !== userId.toString()) {
                 return callback({ success: false, message: "Solo el anfitrión puede cancelar la sala." });
             }
 
-            // 3. Emitir el evento de cierre a todos los jugadores antes de borrar
             io.to(roomCode).emit('room_closed', {
                 message: `${room.players.find(p => p.userId === userId)?.username || "El anfitrión"} ha cancelado la partida.`
             });
 
-            // 4. Eliminar la sala de la base de datos
             await Room.deleteOne({ roomId: roomCode });
 
-            // 5. Devolver éxito al host
             callback({ success: true, message: "Sala cancelada exitosamente." });
 
         } catch (error) {

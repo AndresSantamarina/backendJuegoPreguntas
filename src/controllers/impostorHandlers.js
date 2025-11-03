@@ -98,16 +98,16 @@ export const registerImpostorHandlers = (socket, io, userId, userName) => {
             const correctWord = room.secretWord;
 
             if (guess.toLowerCase() === correctWord.toLowerCase()) {
-                outcomeMessage = `¡Increíble! ${impostorPlayer.username} (Impostor) ha adivinado la palabra clave: **${correctWord}**. Conserva su vida.`;
+                outcomeMessage = `¡Increíble! ${impostorPlayer.username} ha adivinado la palabra clave: ${correctWord}. Conserva su vida.`;
                 await resetAndEmitRound(room, roomCode, outcomeMessage);
 
             } else {
                 impostorPlayer.lives -= 1;
-                outcomeMessage = `¡Vaya! La adivinanza de ${impostorPlayer.username} fue incorrecta. Pierde una vida. La palabra era: **${correctWord}**. Vidas restantes: ${impostorPlayer.lives}.`;
+                outcomeMessage = `¡Vaya! La adivinanza de ${impostorPlayer.username} fue incorrecta. Pierde una vida. La palabra era: ${correctWord}. Vidas restantes: ${impostorPlayer.lives}.`;
 
                 if (impostorPlayer.lives <= 0) {
                     impostorPlayer.isAlive = false;
-                    outcomeMessage += ` El Impostor (${impostorPlayer.username}) ha sido **eliminado**.`;
+                    outcomeMessage += ` El Impostor (${impostorPlayer.username}) ha sido eliminado.`;
                 }
 
                 const remainingAlivePlayers = room.players.filter(p => p.isAlive).length;
@@ -117,7 +117,7 @@ export const registerImpostorHandlers = (socket, io, userId, userName) => {
                     const winnerRole = winnerPlayer.isImpostor ? 'Impostor' : 'Innocents';
 
                     room.status = 'FINISHED';
-                    outcomeMessage += ` ¡Solo queda ${winnerPlayer.username}! El juego termina. Ganan los **${winnerRole}**.`;
+                    outcomeMessage += ` ¡Solo queda ${winnerPlayer.username}! El juego termina. Ganan ${winnerPlayer.username}.`;
 
                     io.to(roomCode).emit('game_finished', {
                         winner: winnerRole,
@@ -127,7 +127,7 @@ export const registerImpostorHandlers = (socket, io, userId, userName) => {
 
                 } else if (remainingAlivePlayers <= 0) {
                     room.status = 'FINISHED';
-                    outcomeMessage += ` El juego termina en **empate**.`;
+                    outcomeMessage += ` El juego termina en empate.`;
 
                     io.to(roomCode).emit('game_finished', {
                         winner: 'Tie',
