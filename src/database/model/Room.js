@@ -30,31 +30,24 @@ const roomSchema = new Schema({
     hostId: { type: String, required: true },
     currentRound: { type: Number, default: 0 },
     maxPlayers: { type: Number, default: 8 },
-
     categoryId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'category',
         required: true
     },
-    words: {
-        type: [String],
-        default: []
-    },
+    words: { type: [String], default: [] },
     secretWord: { type: String, default: null },
+    wrongGuesses: { type: [String], default: [] },
     impostorId: { type: String, default: null },
-
     turnOrder: { type: [String], default: [] },
     currentTurnIndex: { type: Number, default: 0 },
     turnStartTime: { type: Date, default: null },
     turnTimers: { type: [Object], default: [] },
-
     votes: [{
         voterId: String,
         targetId: String
     }],
-
     impostorTarget: { type: String, default: null },
-
     roundHistory: [{
         round: Number,
         clues: [{
@@ -64,7 +57,6 @@ const roomSchema = new Schema({
     }]
 }, { timestamps: true });
 
-
 const Room = mongoose.model('room', roomSchema);
 
-export default Room
+export default Room;

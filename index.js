@@ -18,7 +18,7 @@ const httpServer = http.createServer(app);
 const port = process.env.PORT || 4000;
 
 const allowedOrigins = [
-  "https://juego-preguntas-andres.netlify.app",
+  "http://localhost:5173",
 ];
 
 app.use(cors({

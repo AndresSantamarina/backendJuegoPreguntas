@@ -1,5 +1,5 @@
 import Room from "../database/model/Room.js";
-import { getSafeRoomData, setNextTurn, handleTwoPlayersGame } from './gameLogic.js'
+import { getSafeRoomData, setNextTurn, handleTwoPlayersGame, clearRoomTimer } from './gameLogic.js'
 
 export const registerConnectionHandlers = (socket, io, userId, userName) => {
     socket.on('disconnect', async () => {
@@ -30,19 +30,21 @@ export const registerConnectionHandlers = (socket, io, userId, userName) => {
                     if (aliveInnocents === 0 && room.impostorId) {
                         room.status = 'FINISHED';
                         await room.save();
+
                         io.to(room.roomId).emit('game_finished', {
                             winner: 'Impostor',
                             message: `¡El impostor gana la partida! El último inocente se desconectó.`,
                             finalRoomState: getSafeRoomData(room)
                         });
                         clearRoomTimer(room.roomId);
-                    }
-                    if (room.status === 'IN_GAME' && room.turnOrder[room.currentTurnIndex]?.toString() === userId.toString()) {
-                        await setNextTurn(room);
-                    }
-                    const currentAlivePlayers = room.players.filter(p => p.isAlive).length;
-                    if (currentAlivePlayers === 2 && room.status !== 'FINISHED') {
-                        await handleTwoPlayersGame(room);
+                    } else {
+                        if (room.turnOrder[room.currentTurnIndex]?.toString() === userId.toString()) {
+                            await setNextTurn(room);
+                        }
+                        const currentAlivePlayers = room.players.filter(p => p.isAlive).length;
+                        if (currentAlivePlayers === 2 && room.status !== 'FINISHED') {
+                            await handleTwoPlayersGame(room);
+                        }
                     }
                 }
             }

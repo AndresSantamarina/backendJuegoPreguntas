@@ -1,6 +1,5 @@
 import Room from "../database/model/Room.js";
 import Category from "../database/model/Category.js"
-import User from "../database/model/User.js";
 import { io } from "../../index.js";
 
 const TURN_TIME_MS = 30000;
@@ -16,8 +15,6 @@ const generateRoomId = () => {
 };
 
 const getSafeRoomData = (room) => {
-    const roomObject = room.toObject ? room.toObject() : room;
-
     return {
         roomId: room.roomId,
         status: room.status,
@@ -26,6 +23,9 @@ const getSafeRoomData = (room) => {
         turnOrder: room.turnOrder,
         turnStartTime: room.turnStartTime,
         turnDuration: TURN_TIME_MS,
+        words: room.words || [],
+        secretWord: room.secretWord,
+        wrongGuesses: room.wrongGuesses || [],
 
         players: room.players.map(p => ({
             id: p.userId.toString(),
@@ -101,16 +101,18 @@ const setNextTurn = async (room, isTimeout = false) => {
             room.currentTurnIndex = nextPlayerIndex;
             room.turnStartTime = new Date();
             await room.save();
+
             const nextTurnPlayerId = room.turnOrder[room.currentTurnIndex];
             const nextTurnPlayer = room.players.find(p => p.userId.toString() === nextTurnPlayerId.toString());
 
             io.to(room.roomId).emit('turn_advanced', {
                 ...getSafeRoomData(room),
-                currentPlayerId: room.currentTurnPlayerId,
+                currentPlayerId: room.turnOrder[room.currentTurnIndex],
                 nextTurnUsername: nextTurnPlayer.username,
                 turnStartTime: room.turnStartTime.getTime(),
                 turnDuration: TURN_TIME_MS
             });
+
             ROOM_TIMERS[roomCode] = setTimeout(() => {
                 setNextTurn(room, true);
             }, TURN_TIME_MS);
@@ -157,8 +159,6 @@ const handleTwoPlayersGame = async (room) => {
 
     if (alivePlayers.length !== 2) return false;
 
-    const impostorPlayer = alivePlayers.find(p => p.isImpostor);
-
     room.status = 'GUESSING';
     room.currentRound += 1;
 
@@ -166,6 +166,7 @@ const handleTwoPlayersGame = async (room) => {
 
     room.currentTurnIndex = 0;
     room.turnStartTime = null;
+    room.wrongGuesses = [];
     room.players.forEach(p => {
         p.clueGiven = null;
         p.vote = null;
@@ -184,11 +185,8 @@ const handleTwoPlayersGame = async (room) => {
     room.currentTurnIndex = 0;
     await room.save();
 
-    const category = await Category.findById(room.categoryId);
-
     io.to(roomCode).emit('guessing_started', {
         ...getSafeRoomData(room),
-        words: category.words,
         message: "¡Solo quedan 2! Comienza la ronda de adivinanza. Adivinad la palabra clave de la lista."
     });
 
@@ -201,6 +199,7 @@ const rotateImpostor = (players) => {
     let potentialImpostors = alivePlayers
         .map(p => p.userId.toString())
         .filter(id => id !== currentImpostorId);
+
     if (potentialImpostors.length === 0 && alivePlayers.length > 0) {
         potentialImpostors = [currentImpostorId];
     }
@@ -212,10 +211,8 @@ const rotateImpostor = (players) => {
     return newImpostorId;
 };
 
-
 const resetRoundState = async (room) => {
     const alivePlayers = room.players.filter(p => p.isAlive);
-    const roomCode = room.roomId;
 
     if (alivePlayers.length === 2) {
         return await handleTwoPlayersGame(room);
@@ -228,21 +225,27 @@ const resetRoundState = async (room) => {
 
     room.currentRound += 1;
     room.status = 'IN_GAME';
+
     rotateImpostor(room.players);
+
+    room.markModified('players');
+
     room.turnOrder = shuffleArray(alivePlayers.map(p => p.userId.toString()));
     room.currentTurnIndex = -1;
     room.turnStartTime = new Date();
+    room.wrongGuesses = [];
+    room.markModified('wrongGuesses');
+
     room.players.forEach(p => {
         p.clueGiven = null;
         p.vote = null;
         p.guessGiven = false;
     });
 
-
     const newCategoryArray = await Category.aggregate([{ $sample: { size: 1 } }]);
 
     if (!newCategoryArray || newCategoryArray.length === 0) {
-        console.error("FATAL: No se pudo cargar la categoría para la rotación. Usando la anterior.");
+        console.error("FATAL: No se pudo cargar la categoría para la rotación.");
     } else {
         const selectedCategory = newCategoryArray[0];
         const allWords = selectedCategory.words;
@@ -250,7 +253,9 @@ const resetRoundState = async (room) => {
         const shuffledWords = shuffleArray([...allWords]);
         room.words = allWords.map(w => w.toUpperCase());
         room.secretWord = shuffledWords[0].toUpperCase();
+        room.markModified('words');
     }
+
     room.votes = [];
     room.impostorTarget = null;
 
@@ -258,7 +263,7 @@ const resetRoundState = async (room) => {
     await setNextTurn(room);
 
     io.to(room.roomId).emit('round_new', {
-        currentRound: room.currentRound,
+        ...getSafeRoomData(room),
         message: "Nueva ronda, ¡a jugar!"
     });
 

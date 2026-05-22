@@ -1,11 +1,12 @@
-import Pregunta from "../database/model/Pregunta.js"
+import Pregunta from "../database/model/Pregunta.js";
 
 export const listarPreguntas = async (req, res) => {
     try {
         const preguntas = await Pregunta.find({ usuario: req.usuario._id });
         res.status(200).json(preguntas);
     } catch (error) {
-        res.status(404).json({
+        console.error(error);
+        res.status(500).json({
             mensaje: "No se pudieron obtener las preguntas"
         });
     }
@@ -26,69 +27,91 @@ export const obtenerPregunta = async (req, res) => {
 
         res.status(200).json(pregunta);
     } catch (error) {
-        res.status(404).json({
-            mensaje: "No se encontró la pregunta"
+        console.error(error);
+        res.status(500).json({
+            mensaje: "Ocurrió un error al buscar la pregunta"
         });
     }
-}
+};
 
 export const crearPregunta = async (req, res) => {
     try {
+        if (!req.usuario || !req.usuario._id) {
+            return res.status(401).json({
+                mensaje: "Usuario no autenticado o sesión inválida"
+            });
+        }
+
         const preguntaNueva = new Pregunta({
             ...req.body,
-            usuario: req.usuario.id
+            usuario: req.usuario._id
         });
+
         await preguntaNueva.save();
+
         res.status(201).json({
-            mensaje: "La pregunta fue creada correctamente"
+            mensaje: "La pregunta fue creada correctamente",
+            pregunta: preguntaNueva
         });
     } catch (error) {
         console.error(error);
         res.status(400).json({
-            mensaje: "No se pudo crear la pregunta"
+            mensaje: "No se pudo crear la pregunta",
         });
     }
 };
 
 export const editarPregunta = async (req, res) => {
     try {
-        const buscarPregunta = await Pregunta.findById(req.params.id)
+        const buscarPregunta = await Pregunta.findOne({
+            _id: req.params.id,
+            usuario: req.usuario._id
+        });
+
         if (!buscarPregunta) {
             return res.status(404).json({
-                mensaje: "No se pudo editar la pregunta, id incorrecto"
-            })
+                mensaje: "No se pudo editar. La pregunta no existe o no tienes permisos."
+            });
         }
-        await Pregunta.findByIdAndUpdate(req.params.id, req.body)
+
+        await Pregunta.findByIdAndUpdate(req.params.id, req.body);
+
         res.status(200).json({
             mensaje: "La pregunta fue modificada correctamente"
-        })
+        });
     } catch (error) {
-        console.error(error)
+        console.error(error);
         res.status(500).json({
             mensaje: "Ocurrió un error al intentar editar la pregunta"
-        })
+        });
     }
-}
+};
 
 export const eliminarPregunta = async (req, res) => {
     try {
-        const buscarPregunta = await Pregunta.findById(req.params.id)
+        const buscarPregunta = await Pregunta.findOne({
+            _id: req.params.id,
+            usuario: req.usuario._id
+        });
+
         if (!buscarPregunta) {
             return res.status(404).json({
-                mensaje: "No se pudo eliminar la pregunta, el id es incorrecto"
-            })
+                mensaje: "No se pudo eliminar. La pregunta no existe o no tienes permisos."
+            });
         }
-        await Pregunta.findByIdAndDelete(req.params.id)
+
+        await Pregunta.findByIdAndDelete(req.params.id);
+
         res.status(200).json({
             mensaje: "La pregunta fue eliminada exitosamente"
-        })
+        });
     } catch (error) {
-        console.error(error)
+        console.error(error);
         res.status(500).json({
-            mensaje: "Ocurrió un error al intentar eliminar el producto"
-        })
+            mensaje: "Ocurrió un error al intentar eliminar la pregunta"
+        });
     }
-}
+};
 
 export const niveles = async (req, res) => {
     try {
@@ -101,7 +124,7 @@ export const niveles = async (req, res) => {
             error: error.message
         });
     }
-}
+};
 
 export const preguntasPorNivel = async (req, res) => {
     try {

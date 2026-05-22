@@ -80,15 +80,16 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
     });
 
     socket.on('joinRoom', async (data, callback) => {
-        const res = createSafeResponse(callback);
+        const res = (response) => typeof callback === 'function' && callback(response);
         const { roomId } = data;
         const roomCode = roomId.toUpperCase();
 
         try {
-            let room = await Room.findOne({ roomId: roomCode });
+            const room = await Room.findOne({ roomId: roomCode });
 
-            if (!room) { res({ success: false, message: "Sala no encontrada." }); return }
+            if (!room) return res({ success: false, message: "Sala no encontrada." });
             if (room.status !== 'LOBBY') return res({ success: false, message: "La partida ya ha comenzado." });
+
             const isPlayerInRoom = room.players.some(p => p.userId.toString() === userId.toString());
 
             if (isPlayerInRoom) {
@@ -108,12 +109,11 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
                 isAlive: true,
                 clueGiven: null,
                 vote: null,
+                guessGiven: false,
             };
 
             room.players.push(newPlayer);
             await room.save();
-
-            room = await Room.findOne({ roomId: roomCode });
 
             socket.join(roomCode);
             io.to(roomCode).emit(`player_update`, {
@@ -128,10 +128,10 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
                 message: `Te has unido a la sala ${roomCode}.`
             });
         } catch (error) {
-            console.error("Error al unirse a sala (Socket):", error);
+            console.error("Error al unirse a sala:", error);
             res({ success: false, message: "Error interno al unirse a la sala." });
         }
-    })
+    });
 
     socket.on('getGameState', async (data, callback) => {
         const res = createSafeResponse(callback);
@@ -237,6 +237,7 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
             res({ success: false, message: "Error interno del servidor al iniciar la partida." });
         }
     });
+
     socket.on('cancelGame', async (data, callback) => {
         const { roomId, userId } = data;
         const roomCode = roomId.toUpperCase();
@@ -244,25 +245,24 @@ export const registerLobbyHandlers = (socket, io, userId, userName) => {
         try {
             const room = await Room.findOne({ roomId: roomCode });
 
-            if (!room) {
-                return callback({ success: false, message: "Sala no encontrada." });
-            }
+            if (!room) return callback?.({ success: false, message: "Sala no encontrada." });
 
             if (room.hostId.toString() !== userId.toString()) {
-                return callback({ success: false, message: "Solo el anfitrión puede cancelar la sala." });
+                return callback?.({ success: false, message: "Solo el anfitrión puede cancelar la sala." });
             }
 
             io.to(roomCode).emit('room_closed', {
                 message: `${room.players.find(p => p.userId === userId)?.username || "El anfitrión"} ha cancelado la partida.`
             });
 
+            clearRoomTimer(roomCode);
             await Room.deleteOne({ roomId: roomCode });
 
-            callback({ success: true, message: "Sala cancelada exitosamente." });
+            callback?.({ success: true, message: "Sala cancelada exitosamente." });
 
         } catch (error) {
             console.error("Error al cancelar la sala:", error);
-            callback({ success: false, message: "Error interno del servidor al cancelar la sala." });
+            callback?.({ success: false, message: "Error interno del servidor." });
         }
     });
 }
